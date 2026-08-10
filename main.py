@@ -1,9 +1,9 @@
 import os
-import random
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import discord
 from discord.ext import commands
+from openai import OpenAI
 
 # --- 1. Fake Web Server (Keeps Render Happy) ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -12,7 +12,6 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(b"Bot is online and healthy!")
 
-    # Quiet the log outputs from the web server
     def log_message(self, format, *args):
         return
 
@@ -21,43 +20,56 @@ def run_web_server():
     server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
     server.serve_forever()
 
-# Start web server in a background thread
 threading.Thread(target=run_web_server, daemon=True).start()
 
 
-# --- 2. Discord Bot Setup ---
+# --- 2. Initialize Grok Client & Discord Bot ---
+grok_client = OpenAI(
+    api_key=os.getenv("GROK_API_KEY"),
+    base_url="https://api.x.ai/v1",
+)
+
 intents = discord.Intents.default()
 intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-FUN_RESPONSES = [
-    "Hey there! What's on your mind today? 😊",
-    "Beep boop! I'm alive and ready to chat! 🤖",
-    "Yo! Hope you're having a great day!",
-    "Did someone call for a bot? How can I help?",
-    "Hey! Tell me a story or ask me a question! ✨"
-]
-
 @bot.event
 async def on_ready():
-    print(f"🎉 SUCCESS! Logged in as: {bot.user.name}")
+    print(f"SUCCESS! Logged in as: {bot.user.name}")
 
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
         return
 
-    # Respond if mentioned or in direct messages
+    # Respond in real time if mentioned or in DMs
     if bot.user.mentioned_in(message) or message.guild is None:
-        response = random.choice(FUN_RESPONSES)
-        await message.channel.send(response)
+        user_prompt = message.content.replace(f"<@{bot.user.id}>", "").strip()
+        
+        if not user_prompt:
+            user_prompt = "Hello!"
+
+        try:
+            # Ask Grok to generate a real-time response
+            completion = grok_client.chat.completions.create(
+                model="grok-beta",
+                messages=[
+                    {"role": "system", "content": "You are a helpful, friendly, and concise Discord bot."},
+                    {"role": "user", "content": user_prompt}
+                ]
+            )
+            reply = completion.choices[0].message.content
+            await message.channel.send(reply)
+        except Exception as e:
+            print(f"Grok API Error: {e}")
+            await message.channel.send("Oops! I had trouble thinking of a response right now.")
 
     await bot.process_commands(message)
 
 @bot.command(name="ping")
 async def ping(ctx):
-    await ctx.send("Pong! 🏓 I'm online!")
+    await ctx.send("Pong! 🏓 I'm online and powered by Grok!")
 
 
 # --- 3. Run the Bot ---
@@ -66,18 +78,3 @@ if token:
     bot.run(token)
 else:
     print("ERROR: DISCORD_TOKEN is missing from Environment Variables!")
-    # Process commands if you add any later (like !ping)
-    await bot.process_commands(message)
-
-# 3. Simple Ping Command
-@bot.command(name="ping")
-async def ping(ctx):
-    await ctx.send("Pong! 🏓 I'm online and working!")
-
-# 4. Start the Bot using the Render Environment Variable
-token = os.getenv("DISCORD_TOKEN")
-
-if not token:
-    print("ERROR: DISCORD_TOKEN environment variable not found on Render!")
-else:
-    bot.run(token)

@@ -1,6 +1,7 @@
 import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
+import time
 import discord
 from google import genai
 from google.genai import types
@@ -43,7 +44,6 @@ async def on_message(message):
 
   if discord_client.user in message.mentions:
     try:
-      # Show the "typing..." indicator while processing
       async with message.channel.typing():
         history = []
         async for historic_msg in message.channel.history(limit=5):
@@ -78,7 +78,6 @@ async def on_message(message):
         ).strip()
         response = chat.send_message(user_prompt)
 
-      # Check if response exists and contains text
       if response and response.text:
         await message.channel.send(response.text)
       else:
@@ -95,4 +94,12 @@ async def on_message(message):
       )
 
 
-discord_client.run(os.getenv("DISCORD_TOKEN"))
+# --- AUTO-RESTART WRAPPER ---
+if __name__ == "__main__":
+  while True:
+    try:
+      print("Starting SD-AI bot...")
+      discord_client.run(os.getenv("DISCORD_TOKEN"))
+    except Exception as e:
+      print(f"Bot disconnected: {e}. Auto-restarting in 5 seconds...")
+      time.sleep(5)

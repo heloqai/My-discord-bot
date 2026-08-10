@@ -1,12 +1,33 @@
 import os
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
 import discord
 from google import genai
 from google.genai import types
 
-# Initialize the new Google GenAI client
+# --- MINI WEB SERVER TO SATISFY RENDER'S PORT CHECK ---
+class HealthCheckHandler(BaseHTTPRequestHandler):
+
+  def do_GET(self):
+    self.send_response(200)
+    self.end_headers()
+    self.wfile.write(b"SD-AI Bot is awake and running!")
+
+
+def run_web_server():
+  # Render automatically assigns a PORT environment variable
+  port = int(os.environ.get("PORT", 10000))
+  server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
+  server.serve_forever()
+
+
+# Run the web server in a background thread so it doesn't block the Discord bot
+server_thread = threading.Thread(target=run_web_server, daemon=True)
+server_thread.start()
+
+# --- DISCORD & GEMINI SETUP ---
 client = genai.Client()
 
-# Set up Discord intents
 intents = discord.Intents.default()
 intents.message_content = True
 discord_client = discord.Client(intents=intents)
@@ -19,18 +40,15 @@ async def on_ready():
 
 @discord_client.event
 async def on_message(message):
-  # Prevent the bot from replying to itself
   if message.author == discord_client.user:
     return
 
-  # Respond when the bot is mentioned
   if discord_client.user in message.mentions:
     try:
-      # Build a short memory window from the last few channel messages
       history = []
       async for historic_msg in message.channel.history(limit=5):
         if historic_msg.id == message.id:
-          continue  # Skip the current message itself
+          continue
 
         content = historic_msg.content.replace(
             f"<@{discord_client.user.id}>", ""
@@ -41,10 +59,8 @@ async def on_message(message):
           else:
             history.append(types.UserContent(parts=[types.Part(text=content)]))
 
-      # Ensure chronological order (oldest to newest)
       history.reverse()
 
-      # Define character behavior and system instructions
       config = types.GenerateContentConfig(
           system_instruction=(
               "You are SD-AI, a character from the Murder Drones universe. Stay"
@@ -53,7 +69,6 @@ async def on_message(message):
           )
       )
 
-      # Start chat session using the high-quota stable model
       chat = client.chats.create(
           model="gemini-3.5-flash-lite", history=history, config=config
       )
@@ -78,5 +93,4 @@ async def on_message(message):
       )
 
 
-# Run the Discord bot using your Render token
 discord_client.run(os.getenv("DISCORD_TOKEN"))

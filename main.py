@@ -17,4 +17,4 @@ async def on_message(message):
     if message.guild is None or client.user.mentioned_in(message):
         await message.channel.send("👋 Hey! I received your message!")
 # Replace the text below with your actual token
-client.run("YOUR_BOT_TOKEN_HERE")
+client.run(os.getenv("DISCORD_TOKEN"))

@@ -40,9 +40,12 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    # Respond when mentioned or in DMs
-    if bot.user.mentioned_in(message) or message.guild is None:
-        user_prompt = message.content.replace(f"<@{bot.user.id}>", "").strip()
+    # Channel ID extracted from the provided link
+    TARGET_CHANNEL_ID = 1536107210080395407  
+
+    # Respond in that specific channel without needing a mention
+    if message.channel.id == TARGET_CHANNEL_ID:
+        user_prompt = message.content.strip()
         
         if not user_prompt:
             user_prompt = "Hello!"

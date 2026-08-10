@@ -15,13 +15,11 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
 
 
 def run_web_server():
-  # Render automatically assigns a PORT environment variable
   port = int(os.environ.get("PORT", 10000))
   server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
   server.serve_forever()
 
 
-# Run the web server in a background thread so it doesn't block the Discord bot
 server_thread = threading.Thread(target=run_web_server, daemon=True)
 server_thread.start()
 
@@ -45,51 +43,55 @@ async def on_message(message):
 
   if discord_client.user in message.mentions:
     try:
-      history = []
-      async for historic_msg in message.channel.history(limit=5):
-        if historic_msg.id == message.id:
-          continue
+      # Show the "typing..." indicator while processing
+      async with message.channel.typing():
+        history = []
+        async for historic_msg in message.channel.history(limit=5):
+          if historic_msg.id == message.id:
+            continue
 
-        content = historic_msg.content.replace(
+          content = historic_msg.content.replace(
+              f"<@{discord_client.user.id}>", ""
+          ).strip()
+          if content:
+            if historic_msg.author == discord_client.user:
+              history.append(types.ModelContent(parts=[types.Part(text=content)]))
+            else:
+              history.append(types.UserContent(parts=[types.Part(text=content)]))
+
+        history.reverse()
+
+        config = types.GenerateContentConfig(
+            system_instruction=(
+                "You are SD-AI, a character from the Murder Drones universe. Stay"
+                " in character, be slightly sarcastic or dramatic, and respond"
+                " accordingly."
+            )
+        )
+
+        chat = client.chats.create(
+            model="gemini-3.5-flash-lite", history=history, config=config
+        )
+
+        user_prompt = message.content.replace(
             f"<@{discord_client.user.id}>", ""
         ).strip()
-        if content:
-          if historic_msg.author == discord_client.user:
-            history.append(types.ModelContent(parts=[types.Part(text=content)]))
-          else:
-            history.append(types.UserContent(parts=[types.Part(text=content)]))
+        response = chat.send_message(user_prompt)
 
-      history.reverse()
-
-      config = types.GenerateContentConfig(
-          system_instruction=(
-              "You are SD-AI, a character from the Murder Drones universe. Stay"
-              " in character, be slightly sarcastic or dramatic, and respond"
-              " accordingly."
-          )
-      )
-
-      chat = client.chats.create(
-          model="gemini-3.5-flash-lite", history=history, config=config
-      )
-
-      user_prompt = message.content.replace(
-          f"<@{discord_client.user.id}>", ""
-      ).strip()
-      response = chat.send_message(user_prompt)
-
-      if response.text:
+      # Check if response exists and contains text
+      if response and response.text:
         await message.channel.send(response.text)
       else:
+        print("Warning: Gemini returned an empty response.")
         await message.channel.send(
-            "*System error: Core temperature spiking... processing blocked by"
-            " safety protocols.*"
+            "*System error: Core temperature spiking... response blocked or"
+            " empty.*"
         )
 
     except Exception as e:
-      print(f"Error generating response: {e}")
+      print(f"CRITICAL ERROR generating response: {e}")
       await message.channel.send(
-          "*Fatal Error: Oil pressure drop detected. Processing halted.*"
+          f"*Fatal Error: Oil pressure drop detected. Details: `{e}`*"
       )
 
 

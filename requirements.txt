@@ -1,2 +1,3 @@
-discord.py
-google-generativeai
+chat = client.chats.create(
+    model="gemini-3.5-flash-lite", history=history, config=config
+)

@@ -5,7 +5,7 @@ import google.generativeai as genai
 # Load API keys from your environment variables
 genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
-# Adjust safety thresholds so fictional sci-fi/drone context doesn't crash the bot
+# Safety thresholds to prevent fictional sci-fi context crashes
 safety_settings = [
     {
         "category": "HARM_CATEGORY_HARASSMENT",
@@ -25,7 +25,7 @@ safety_settings = [
     },
 ]
 
-# Initialize the Gemini model with your settings and character persona
+# Initialize the Gemini model
 model = genai.GenerativeModel(
     model_name="gemini-1.5-flash",
     safety_settings=safety_settings,
@@ -54,13 +54,31 @@ async def on_message(message):
 
   # Respond when the bot is mentioned
   if client.user in message.mentions:
-    user_prompt = message.content.replace(f"<@{client.user.id}>", "").strip()
-
     try:
-      # Generate response from Gemini API
-      response = model.generate_content(user_prompt)
+      # Build a short memory window from the last few channel messages (e.g., last 4)
+      history = []
+      async for historic_msg in message.channel.history(limit=5):
+        if historic_msg.id == message.id:
+          continue  # Skip the current message itself
 
-      # Safely verify that response text exists before sending
+        # Determine if the message came from the bot or a user
+        role = "model" if historic_msg.author == client.user else "user"
+
+        # Clean bot mentions out of the text history
+        content = historic_msg.content.replace(f"<@{client.user.id}>", "").strip()
+        if content:
+          # Insert at the beginning to keep chronological order (oldest to newest)
+          history.insert(0, {"role": role, "parts": [content]})
+
+      # Start a chat session with this restricted history
+      chat = model.start_chat(history=history)
+
+      # Get the clean prompt text for the current message
+      user_prompt = message.content.replace(f"<@{client.user.id}>", "").strip()
+
+      # Send the message within the short chat session context
+      response = chat.send_message(user_prompt)
+
       if response.text:
         await message.channel.send(response.text)
       else:
@@ -70,12 +88,11 @@ async def on_message(message):
         )
 
     except Exception as e:
-      # Catch unexpected API errors or safety crashes gracefully
       print(f"Error generating response: {e}")
       await message.channel.send(
           "*Fatal Error: Oil pressure drop detected. Processing halted.*"
       )
 
 
-# Run the Discord bot using the token stored in your Render environment variables
+# Run the Discord bot using your Render token
 client.run(os.getenv("DISCORD_TOKEN"))

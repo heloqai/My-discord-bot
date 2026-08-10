@@ -51,9 +51,9 @@ async def on_message(message):
             user_prompt = "Hello!"
 
         try:
-            # THIS IS WHERE THE CODE GOES:
+            # Using grok-beta for the API call
             completion = grok_client.chat.completions.create(
-                model="grok-3",
+                model="grok-beta",
                 messages=[
                     {"role": "system", "content": "You are a helpful, friendly, and concise Discord bot."},
                     {"role": "user", "content": user_prompt}
@@ -63,7 +63,8 @@ async def on_message(message):
             await message.channel.send(reply)
         except Exception as e:
             print(f"Grok API Error: {e}")
-            await message.channel.send("Oops! I had trouble thinking of a response right now.")
+            # This will now show the exact error in Discord so we know what's wrong!
+            await message.channel.send(f"API Error: {e}")
 
     await bot.process_commands(message)
 

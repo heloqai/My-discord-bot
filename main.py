@@ -36,9 +36,8 @@ def create_bot(token_env, api_key_env, persona):
   intents.message_content = True
   bot = discord.Client(intents=intents)
 
-  # Dictionary to track 15-second cooldowns per user for this bot
   user_cooldowns = {}
-  COOLDOWN_TIME = 15  # seconds
+  COOLDOWN_TIME = 15
 
   @bot.event
   async def on_ready():
@@ -46,11 +45,9 @@ def create_bot(token_env, api_key_env, persona):
 
   @bot.event
   async def on_message(message):
-    # Ignore own messages
     if message.author == bot.user:
       return
 
-    # --- ANTI-LOOP PROTECTION ---
     if message.author.bot:
       async for hist in message.channel.history(limit=2):
         if hist.id != message.id and hist.author.bot:
@@ -63,17 +60,14 @@ def create_bot(token_env, api_key_env, persona):
     is_command = message.content.lower().startswith(bot_prefix)
 
     if is_mentioned or is_command or message.author.bot:
-      # --- 15-SECOND COOLDOWN CHECK ---
       current_time = time.time()
       last_interaction = user_cooldowns.get(message.author.id, 0)
       
       if not message.author.bot and (current_time - last_interaction < COOLDOWN_TIME):
         remaining = int(COOLDOWN_TIME - (current_time - last_interaction))
-        # Optionally notify user about the cooldown
         await message.channel.send(f"⏳ Whoa there! Please wait **{remaining} more seconds** before talking to {persona['name']} again.", delete_after=5)
         return
 
-      # Update cooldown timestamp for this user
       user_cooldowns[message.author.id] = current_time
 
       try:
@@ -138,7 +132,8 @@ async def run_all_bots():
           "name": "SD-AI",
           "instruction": (
               "You are SD-AI, a sarcastic and dramatic character from the"
-              " Murder Drones universe. Stay in character."
+              " Murder Drones universe. Keep your responses short, punchy, and"
+              " concise, maximum 1-2 sentences."
           ),
       },
       {
@@ -147,9 +142,9 @@ async def run_all_bots():
           "name": "SD-N",
           "instruction": (
               "You are Serial Designation N from Murder Drones. You are polite,"
-              " overly enthusiastic, anxious to please, apologetic, love golden"
-              " retrievers and biscuits, and try to be intimidating but are"
-              " mostly just a sweet cinnamon roll."
+              " overly enthusiastic, anxious to please, and love golden"
+              " retrievers and biscuits. Keep your responses short, punchy, and"
+              " concise, maximum 1-2 sentences."
           ),
       },
       {
@@ -158,9 +153,8 @@ async def run_all_bots():
           "name": "Uzi",
           "instruction": (
               "You are Uzi Doorman from Murder Drones. You are angsty, dramatic,"
-              " obsessed with goth things, building railguns, and anime, and you"
-              " frequently say lines like 'Bite me!' while acting defensive and"
-              " rebellious."
+              " and obsessed with goth things and railguns. Keep your"
+              " responses short, punchy, and concise, maximum 1-2 sentences."
           ),
       },
       {
@@ -169,9 +163,9 @@ async def run_all_bots():
           "name": "Cyn",
           "instruction": (
               "You are Cyn / The Absolute Solver from Murder Drones. You speak"
-              " in a creepy, glitchy, and innocent yet terrifying tone, use"
-              " dramatic action tags like *giggle*, *light sip*, or *head"
-              " tilt*, and reference the Absolute Solver."
+              " in a creepy, glitchy tone using action tags like *giggle* or"
+              " *head tilt*. Keep your responses short, punchy, and concise,"
+              " maximum 1-2 sentences."
           ),
       },
   ]

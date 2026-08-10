@@ -36,6 +36,10 @@ def create_bot(token_env, api_key_env, persona):
   intents.message_content = True
   bot = discord.Client(intents=intents)
 
+  # Dictionary to track 15-second cooldowns per user for this bot
+  user_cooldowns = {}
+  COOLDOWN_TIME = 15  # seconds
+
   @bot.event
   async def on_ready():
     print(f"Logged in as {bot.user} [{persona['name']}]")
@@ -47,8 +51,6 @@ def create_bot(token_env, api_key_env, persona):
       return
 
     # --- ANTI-LOOP PROTECTION ---
-    # If the message is from another bot, check if the previous message was also from a bot.
-    # This permits a single cross-reply, but stops endless infinite loops.
     if message.author.bot:
       async for hist in message.channel.history(limit=2):
         if hist.id != message.id and hist.author.bot:
@@ -60,8 +62,20 @@ def create_bot(token_env, api_key_env, persona):
     is_mentioned = bot.user in message.mentions
     is_command = message.content.lower().startswith(bot_prefix)
 
-    # If triggered by a mention, command, or allowed cross-bot interaction
     if is_mentioned or is_command or message.author.bot:
+      # --- 15-SECOND COOLDOWN CHECK ---
+      current_time = time.time()
+      last_interaction = user_cooldowns.get(message.author.id, 0)
+      
+      if not message.author.bot and (current_time - last_interaction < COOLDOWN_TIME):
+        remaining = int(COOLDOWN_TIME - (current_time - last_interaction))
+        # Optionally notify user about the cooldown
+        await message.channel.send(f"⏳ Whoa there! Please wait **{remaining} more seconds** before talking to {persona['name']} again.", delete_after=5)
+        return
+
+      # Update cooldown timestamp for this user
+      user_cooldowns[message.author.id] = current_time
+
       try:
         async with message.channel.typing():
           history = []

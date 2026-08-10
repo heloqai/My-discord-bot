@@ -4,6 +4,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 import discord
 from discord.ext import commands
 from google import genai
+from google.genai import types
 
 # --- 1. Fake Web Server (Keeps Render Happy) ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
@@ -54,6 +55,9 @@ async def on_message(message):
             response = client.models.generate_content(
                 model="gemini-3.5-flash",
                 contents=user_prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction="Your name is SD-AI. You are a helpful, friendly, and concise Discord bot."
+                )
             )
             reply = response.text
             await message.channel.send(reply)

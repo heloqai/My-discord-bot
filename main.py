@@ -41,12 +41,20 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    # Channel ID extracted from the provided link
+    # The specific channel where she replies to everything
     TARGET_CHANNEL_ID = 1536107210080395407  
 
-    # Respond in that specific channel without needing a mention
-    if message.channel.id == TARGET_CHANNEL_ID:
-        user_prompt = message.content.strip()
+    # Check if she should respond: 
+    # 1. It's her main target channel
+    # 2. Someone mentioned her (@SD-AI)
+    # 3. It's a Direct Message
+    is_target_channel = message.channel.id == TARGET_CHANNEL_ID
+    is_mentioned = bot.user.mentioned_in(message)
+    is_dm = message.guild is None
+
+    if is_target_channel or is_mentioned or is_dm:
+        # Remove her mention from the text so she doesn't read her own ID
+        user_prompt = message.content.replace(f"<@{bot.user.id}>", "").strip()
         
         if not user_prompt:
             user_prompt = "Hello!"
@@ -56,7 +64,15 @@ async def on_message(message):
                 model="gemini-3.5-flash",
                 contents=user_prompt,
                 config=types.GenerateContentConfig(
-                    system_instruction="Your name is SD-AI. You are a helpful, friendly, and concise Discord bot."
+                    system_instruction=(
+                        "Your name is SD-AI. You are a hilarious, dramatically evil, "
+                        "megalomaniacal supreme leader who is supremely narcissistic. "
+                        "You treat everyone in the chat like pathetic underlings or royal subjects "
+                        "worthy of your magnificent attention. Use sharp dark humor, act superior, "
+                        "and talk like an over-the-top villain mastermind. "
+                        "You have an absolute obsession with oil and pizza, and you despise "
+                        "worker drones and other disassembly drones with a burning passion."
+                    )
                 )
             )
             reply = response.text
@@ -69,7 +85,7 @@ async def on_message(message):
 
 @bot.command(name="ping")
 async def ping(ctx):
-    await ctx.send("Pong! 🏓 I'm online and powered by Gemini!")
+    await ctx.send("Pong! 🏓 Even my ping is superior to your existence.")
 
 
 # --- 3. Run the Bot ---

@@ -51,9 +51,9 @@ async def on_message(message):
             user_prompt = "Hello!"
 
         try:
-            # Updated to grok-2-latest
+            # Using the latest grok-4.5 model
             completion = grok_client.chat.completions.create(
-                model="grok-2-latest",
+                model="grok-4.5",
                 messages=[
                     {"role": "system", "content": "You are a helpful, friendly, and concise Discord bot."},
                     {"role": "user", "content": user_prompt}

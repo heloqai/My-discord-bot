@@ -42,8 +42,17 @@ def create_bot(token_env, api_key_env, persona):
 
   @bot.event
   async def on_message(message):
+    # Ignore own messages
     if message.author == bot.user:
       return
+
+    # --- ANTI-LOOP PROTECTION ---
+    # If the message is from another bot, check if the previous message was also from a bot.
+    # This permits a single cross-reply, but stops endless infinite loops.
+    if message.author.bot:
+      async for hist in message.channel.history(limit=2):
+        if hist.id != message.id and hist.author.bot:
+          return
 
     clean_name = persona["name"].lower().replace("-", "").replace(" ", "")
     bot_prefix = f"!{clean_name} "
@@ -51,7 +60,8 @@ def create_bot(token_env, api_key_env, persona):
     is_mentioned = bot.user in message.mentions
     is_command = message.content.lower().startswith(bot_prefix)
 
-    if is_mentioned or is_command:
+    # If triggered by a mention, command, or allowed cross-bot interaction
+    if is_mentioned or is_command or message.author.bot:
       try:
         async with message.channel.typing():
           history = []
@@ -110,7 +120,7 @@ async def run_all_bots():
   bot_configs = [
       {
           "token_env": "DISCORD_TOKEN_1",
-          "api_key_env": "GEMINI_API_KEY_2",  # Uses Key 2
+          "api_key_env": "GEMINI_API_KEY_2",
           "name": "SD-AI",
           "instruction": (
               "You are SD-AI, a sarcastic and dramatic character from the"
@@ -119,7 +129,7 @@ async def run_all_bots():
       },
       {
           "token_env": "DISCORD_TOKEN_2",
-          "api_key_env": "GEMINI_API_KEY_1",  # Uses Key 1
+          "api_key_env": "GEMINI_API_KEY_1",
           "name": "SD-N",
           "instruction": (
               "You are Serial Designation N from Murder Drones. You are polite,"
@@ -130,7 +140,7 @@ async def run_all_bots():
       },
       {
           "token_env": "DISCORD_TOKEN_3",
-          "api_key_env": "GEMINI_API_KEY_1",  # Uses Key 1
+          "api_key_env": "GEMINI_API_KEY_1",
           "name": "Uzi",
           "instruction": (
               "You are Uzi Doorman from Murder Drones. You are angsty, dramatic,"
@@ -141,7 +151,7 @@ async def run_all_bots():
       },
       {
           "token_env": "DISCORD_TOKEN_4",
-          "api_key_env": "GEMINI_API_KEY_2",  # Uses Key 2
+          "api_key_env": "GEMINI_API_KEY_2",
           "name": "Cyn",
           "instruction": (
               "You are Cyn / The Absolute Solver from Murder Drones. You speak"

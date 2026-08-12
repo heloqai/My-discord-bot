@@ -8,6 +8,28 @@ from google import genai
 from google.genai import types
 
 
+# --- IGNORED CHANNELS (BOTS WILL NOT SPEAK HERE) ---
+IGNORED_CHANNEL_IDS = {
+    1536653657590993057,
+    1536653596966527067,
+    1536091470174490694,
+    1536064739866583150,
+    1536085774406258809,
+    1536065830201065582,
+    1536653354413989938,
+    1535353304966631432,
+    1535353304966631431,
+    1535353304966631428,
+    1536106820249329746,
+    1536069247116251169,
+    1535353304966631426,
+    1536104567471865977,
+    1535409153667768390,
+    1535402131153231922,
+    1535401551680643132,
+}
+
+
 # --- MINI WEB SERVER TO SATISFY RENDER'S PORT CHECK ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
 
@@ -46,6 +68,10 @@ def create_bot(token_env, api_key_env, persona):
   @bot.event
   async def on_message(message):
     if message.author == bot.user:
+      return
+
+    # --- BLOCK BOTS FROM SPEAKING IN SPECIFIED CHANNELS ---
+    if message.channel.id in IGNORED_CHANNEL_IDS:
       return
 
     if message.author.bot:

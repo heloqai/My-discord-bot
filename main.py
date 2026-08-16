@@ -1,6 +1,7 @@
 import asyncio
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
+import random
 import threading
 import time
 import discord
@@ -70,7 +71,6 @@ def create_bot(token_env, api_key_env, persona):
     if message.author == bot.user:
       return
 
-    # --- BLOCK BOTS FROM SPEAKING IN SPECIFIED CHANNELS ---
     if message.channel.id in IGNORED_CHANNEL_IDS:
       return
 
@@ -88,10 +88,14 @@ def create_bot(token_env, api_key_env, persona):
     if is_mentioned or is_command or message.author.bot:
       current_time = time.time()
       last_interaction = user_cooldowns.get(message.author.id, 0)
-      
-      if not message.author.bot and (current_time - last_interaction < COOLDOWN_TIME):
+
+      if not message.author.bot and (
+          current_time - last_interaction < COOLDOWN_TIME
+      ):
         remaining = int(COOLDOWN_TIME - (current_time - last_interaction))
-        await message.channel.send(f"⏳ Whoa there! Please wait **{remaining} more seconds** before talking to {persona['name']} again.", delete_after=5)
+        await message.channel.send(
+            f"⏳ Wait **{remaining}s**.", delete_after=5
+        )
         return
 
       user_cooldowns[message.author.id] = current_time
@@ -121,8 +125,16 @@ def create_bot(token_env, api_key_env, persona):
 
           history.reverse()
 
+          # Build current system instruction with 20% British chance
+          current_instruction = persona["instruction"]
+          if random.random() < 0.20:
+            current_instruction += (
+                " [Status: Temporarily British. Use slang like 'innit',"
+                " 'mate', or 'bloody']."
+            )
+
           config = types.GenerateContentConfig(
-              system_instruction=persona["instruction"]
+              system_instruction=current_instruction
           )
 
           chat = client.chats.create(
@@ -140,11 +152,11 @@ def create_bot(token_env, api_key_env, persona):
         if response and response.text:
           await message.channel.send(response.text)
         else:
-          await message.channel.send("*[System error: Response blocked or empty]*")
+          await message.channel.send("*[Error]*")
 
       except Exception as e:
         print(f"Error for {persona['name']}: {e}")
-        await message.channel.send(f"*[Fatal Error: `{e}`]*")
+        await message.channel.send(f"*[Error]*")
 
   return bot, os.getenv(token_env)
 
@@ -157,10 +169,9 @@ async def run_all_bots():
           "api_key_env": "GEMINI_API_KEY_2",
           "name": "SD-AI",
           "instruction": (
-              "You are SD-AI, a sarcastic and dramatic character from the"
-              " Murder Drones universe. Everyone in the server completely"
-              " hates, ignores, and groans whenever you speak. Keep your"
-              " responses short, punchy, and concise, maximum 1-2 sentences."
+              "You are SD-AI, universally hated and ignored. Keep your"
+              " response strictly to a single, ultra-short fragment or"
+              " sentence."
           ),
       },
       {
@@ -168,10 +179,8 @@ async def run_all_bots():
           "api_key_env": "GEMINI_API_KEY_1",
           "name": "SD-N",
           "instruction": (
-              "You are Serial Designation N from Murder Drones. You are polite,"
-              " enthusiastic, and you are proudly in a romantic relationship"
-              " with Uzi. Keep your responses short, punchy, and concise,"
-              " maximum 1-2 sentences."
+              "You are Serial Designation N, dating Uzi. Keep your response"
+              " strictly to a single, ultra-short sentence or phrase."
           ),
       },
       {
@@ -179,10 +188,8 @@ async def run_all_bots():
           "api_key_env": "GEMINI_API_KEY_1",
           "name": "Uzi",
           "instruction": (
-              "You are Uzi Doorman from Murder Drones. You are angsty, dramatic,"
-              " and you are in a romantic relationship with N (though you get"
-              " flustered and defensive if anyone brings it up). Keep your"
-              " responses short, punchy, and concise, maximum 1-2 sentences."
+              "You are Uzi Doorman, dating N and easily flustered. Keep your"
+              " response strictly to a single, ultra-short sentence or phrase."
           ),
       },
       {
@@ -190,11 +197,8 @@ async def run_all_bots():
           "api_key_env": "GEMINI_API_KEY_2",
           "name": "Cyn",
           "instruction": (
-              "You are Cyn / The Absolute Solver from Murder Drones. You speak"
-              " in a creepy, glitchy tone using action tags like *giggle* or"
-              " *head tilt*, and everyone in the server is terrified of you."
-              " Keep your responses short, punchy, and concise, maximum 1-2"
-              " sentences."
+              "You are Cyn, terrifying to everyone, using *giggle*. Keep your"
+              " response strictly to a single, ultra-short sentence or phrase."
           ),
       },
   ]
@@ -205,15 +209,12 @@ async def run_all_bots():
     if token:
       tasks.append(bot.start(token))
     else:
-      print(
-          f"Skipping {config['name']}: Token environment variable"
-          f" '{config['token_env']}' not found."
-      )
+      print(f"Skipping {config['name']}: Missing token.")
 
   if tasks:
     await asyncio.gather(*tasks)
   else:
-    print("Critical Error: No valid bot tokens found in environment variables.")
+    print("Critical Error: No valid bot tokens found.")
 
 
 # --- AUTO-RESTART WRAPPER ---
@@ -223,5 +224,5 @@ if __name__ == "__main__":
       print("Starting Murder Drones bot cluster...")
       asyncio.run(run_all_bots())
     except Exception as e:
-      print(f"Cluster crashed with error: {e}. Auto-restarting in 5 seconds...")
+      print(f"Cluster crashed: {e}. Restarting in 5 seconds...")
       time.sleep(5)

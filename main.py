@@ -1,228 +1,54 @@
-import asyncio
-from http.server import BaseHTTPRequestHandler, HTTPServer
 import os
-import random
-import threading
-import time
 import discord
+from discord.ext import commands
 from google import genai
-from google.genai import types
 
+# Fetch variables using your specific key names
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY_1")
+DISCORD_TOKEN = os.environ.get("DISCORD_BOT_TOKEN_1")
 
-# --- IGNORED CHANNELS (BOTS WILL NOT SPEAK HERE) ---
-IGNORED_CHANNEL_IDS = {
-    1536653657590993057,
-    1536653596966527067,
-    1536091470174490694,
-    1536064739866583150,
-    1536085774406258809,
-    1536065830201065582,
-    1536653354413989938,
-    1535353304966631432,
-    1535353304966631431,
-    1535353304966631428,
-    1536106820249329746,
-    1536069247116251169,
-    1535353304966631426,
-    1536104567471865977,
-    1535409153667768390,
-    1535402131153231922,
-    1535401551680643132,
-}
+# Initialize Gemini Client with your specific key variable
+gemini_client = genai.Client(api_key=GEMINI_KEY)
 
+# System prompt forcing raw code outputs only
+SYSTEM_INSTRUCTION = (
+    "You are a raw code generation engine. "
+    "Output strictly functional, executable code for the user request. "
+    "Do NOT include introductory remarks, markdown headers, conversational explanations, "
+    "or closing thoughts. Return ONLY code."
+)
 
-# --- MINI WEB SERVER TO SATISFY RENDER'S PORT CHECK ---
-class HealthCheckHandler(BaseHTTPRequestHandler):
+# Set up Discord bot intents
+intents = discord.Intents.default()
+intents.message_content = True
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-  def do_GET(self):
-    self.send_response(200)
-    self.end_headers()
-    self.wfile.write(b"Murder Drones Bot Cluster is awake and running!")
+@bot.event
+async def on_ready():
+    print(f"Logged in successfully as {bot.user.name}")
 
+@bot.command(name="code")
+async def generate_code(ctx, *, prompt: str):
+    await ctx.send("Generating code...")
 
-def run_web_server():
-  port = int(os.environ.get("PORT", 10000))
-  server = HTTPServer(("0.0.0.0", port), HealthCheckHandler)
-  server.serve_forever()
-
-
-server_thread = threading.Thread(target=run_web_server, daemon=True)
-server_thread.start()
-
-
-# --- DYNAMIC BOT BUILDER ---
-def create_bot(token_env, api_key_env, persona):
-  api_key = os.getenv(api_key_env)
-  client = genai.Client(api_key=api_key) if api_key else genai.Client()
-
-  intents = discord.Intents.default()
-  intents.message_content = True
-  bot = discord.Client(intents=intents)
-
-  user_cooldowns = {}
-  COOLDOWN_TIME = 15
-
-  @bot.event
-  async def on_ready():
-    print(f"Logged in as {bot.user} [{persona['name']}]")
-
-  @bot.event
-  async def on_message(message):
-    if message.author == bot.user:
-      return
-
-    if message.channel.id in IGNORED_CHANNEL_IDS:
-      return
-
-    if message.author.bot:
-      async for hist in message.channel.history(limit=2):
-        if hist.id != message.id and hist.author.bot:
-          return
-
-    clean_name = persona["name"].lower().replace("-", "").replace(" ", "")
-    bot_prefix = f"!{clean_name} "
-
-    is_mentioned = bot.user in message.mentions
-    is_command = message.content.lower().startswith(bot_prefix)
-
-    if is_mentioned or is_command or message.author.bot:
-      current_time = time.time()
-      last_interaction = user_cooldowns.get(message.author.id, 0)
-
-      if not message.author.bot and (
-          current_time - last_interaction < COOLDOWN_TIME
-      ):
-        remaining = int(COOLDOWN_TIME - (current_time - last_interaction))
-        await message.channel.send(
-            f"⏳ Wait **{remaining}s**.", delete_after=5
-        )
-        return
-
-      user_cooldowns[message.author.id] = current_time
-
-      try:
-        async with message.channel.typing():
-          history = []
-          async for historic_msg in message.channel.history(limit=5):
-            if historic_msg.id == message.id:
-              continue
-
-            content = historic_msg.content.replace(
-                f"<@{bot.user.id}>", ""
-            ).strip()
-            if content.lower().startswith(bot_prefix):
-              content = content[len(bot_prefix) :].strip()
-
-            if content:
-              if historic_msg.author == bot:
-                history.append(
-                    types.ModelContent(parts=[types.Part(text=content)])
-                )
-              else:
-                history.append(
-                    types.UserContent(parts=[types.Part(text=content)])
-                )
-
-          history.reverse()
-
-          # Build current system instruction with 20% British chance
-          current_instruction = persona["instruction"]
-          if random.random() < 0.20:
-            current_instruction += (
-                " [Status: Temporarily British. Use slang like 'innit',"
-                " 'mate', or 'bloody']."
-            )
-
-          config = types.GenerateContentConfig(
-              system_instruction=current_instruction
-          )
-
-          chat = client.chats.create(
-              model="gemini-3.5-flash-lite", history=history, config=config
-          )
-
-          user_prompt = message.content
-          if is_command:
-            user_prompt = user_prompt[len(bot_prefix) :].strip()
-          else:
-            user_prompt = user_prompt.replace(f"<@{bot.user.id}>", "").strip()
-
-          response = chat.send_message(user_prompt)
-
-        if response and response.text:
-          await message.channel.send(response.text)
-        else:
-          await message.channel.send("*[Error]*")
-
-      except Exception as e:
-        print(f"Error for {persona['name']}: {e}")
-        await message.channel.send(f"*[Error]*")
-
-  return bot, os.getenv(token_env)
-
-
-# --- MAIN ASYNC RUNNER FOR ALL 4 BOTS ---
-async def run_all_bots():
-  bot_configs = [
-      {
-          "token_env": "DISCORD_TOKEN_1",
-          "api_key_env": "GEMINI_API_KEY_2",
-          "name": "SD-AI",
-          "instruction": (
-              "You are SD-AI, universally hated and ignored. Keep your"
-              " response strictly to a single, ultra-short fragment or"
-              " sentence."
-          ),
-      },
-      {
-          "token_env": "DISCORD_TOKEN_2",
-          "api_key_env": "GEMINI_API_KEY_1",
-          "name": "SD-N",
-          "instruction": (
-              "You are Serial Designation N, dating Uzi. Keep your response"
-              " strictly to a single, ultra-short sentence or phrase."
-          ),
-      },
-      {
-          "token_env": "DISCORD_TOKEN_3",
-          "api_key_env": "GEMINI_API_KEY_1",
-          "name": "Uzi",
-          "instruction": (
-              "You are Uzi Doorman, dating N and easily flustered. Keep your"
-              " response strictly to a single, ultra-short sentence or phrase."
-          ),
-      },
-      {
-          "token_env": "DISCORD_TOKEN_4",
-          "api_key_env": "GEMINI_API_KEY_2",
-          "name": "Cyn",
-          "instruction": (
-              "You are Cyn, terrifying to everyone, using *giggle*. Keep your"
-              " response strictly to a single, ultra-short sentence or phrase."
-          ),
-      },
-  ]
-
-  tasks = []
-  for config in bot_configs:
-    bot, token = create_bot(config["token_env"], config["api_key_env"], config)
-    if token:
-      tasks.append(bot.start(token))
-    else:
-      print(f"Skipping {config['name']}: Missing token.")
-
-  if tasks:
-    await asyncio.gather(*tasks)
-  else:
-    print("Critical Error: No valid bot tokens found.")
-
-
-# --- AUTO-RESTART WRAPPER ---
-if __name__ == "__main__":
-  while True:
     try:
-      print("Starting Murder Drones bot cluster...")
-      asyncio.run(run_all_bots())
+        # Request pure code from Gemini API
+        response = gemini_client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=prompt,
+            config={"system_instruction": SYSTEM_INSTRUCTION}
+        )
+
+        code_result = response.text
+
+        # Handle Discord's 2000-character message limit safely
+        if len(code_result) > 1900:
+            for chunk in [code_result[i:i+1900] for i in range(0, len(code_result), 1900)]:
+                await ctx.send(f"```\n{chunk}\n```")
+        else:
+            await ctx.send(f"```\n{code_result}\n```")
+
     except Exception as e:
-      print(f"Cluster crashed: {e}. Restarting in 5 seconds...")
-      time.sleep(5)
+        await ctx.send(f"Error generating code: {e}")
+
+bot.run(DISCORD_TOKEN)

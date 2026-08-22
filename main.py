@@ -4,7 +4,7 @@ from discord.ext import commands
 from google import genai
 
 # Fetch variables using your specific key names
-GEMINI_KEY = os.environ.get("GEMINI_API_KEY_1")
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY_2")
 DISCORD_TOKEN = os.environ.get("DISCORD_BOT_TOKEN_1")
 
 # Initialize Gemini Client with your specific key variable
